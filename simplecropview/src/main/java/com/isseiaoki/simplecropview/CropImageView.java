@@ -1022,48 +1022,61 @@ public class CropImageView extends ImageView {
     }
 
     /**
-     * Get cropped image bitmap
+     * Returns a cropped bitmap following the size specified by the source bitmap and the crop
+     * UI.
      *
      * @return cropped image bitmap
      */
     public Bitmap getCroppedBitmap() {
-        Bitmap source = getBitmap();
-        if (source == null) return null;
-
-        int x, y, w, h;
-        float l = (mFrameRect.left / mScale);
-        float t = (mFrameRect.top / mScale);
-        float r = (mFrameRect.right / mScale);
-        float b = (mFrameRect.bottom / mScale);
-        x = Math.round(l - (mImageRect.left / mScale));
-        y = Math.round(t - (mImageRect.top / mScale));
-        w = Math.round(r - l);
-        h = Math.round(b - t);
-
-        if (x + w > source.getWidth()) {
-            w = source.getWidth() - x;
-        }
-        if (y + h > source.getHeight()) {
-            h = source.getHeight() - y;
-        }
-
-        Bitmap cropped = Bitmap.createBitmap(source, x, y, w, h, null, false);
-        if (mCropMode != CropMode.CIRCLE) return cropped;
-        return getCircularBitmap(cropped);
+        final Rect sourceArea = getCropArea(getBitmap());
+        final Rect targetArea = new Rect(0, 0, sourceArea.width(), sourceArea.height());
+        return getCroppedBitmap(sourceArea, targetArea);
     }
 
     /**
-     * Get cropped rect image bitmap
-     * <p/>
-     * This method always returns rect image.
-     * (If you need a square image with CropMode.CIRCLE, you can use this method.)
+     * Returns a cropped bitmap of the specified width and height, scaling down and up as necessary.
      *
+     * @param width  Target width
+     * @param height Target height
      * @return cropped image bitmap
      */
-    public Bitmap getRectBitmap() {
+    public Bitmap getCroppedBitmap(int width, int height) {
+        final Rect sourceArea = getCropArea(getBitmap());
+        final Rect targetArea = new Rect(0, 0, width, height);
+        return getCroppedBitmap(sourceArea, targetArea);
+    }
+
+    /**
+     * Get cropped image bitmap
+     *
+     * @param cropArea   Area from the source bitmap to crop
+     * @param targetArea Area to fit the cropping into
+     * @return cropped image bitmap
+     */
+    protected Bitmap getCroppedBitmap(Rect cropArea, Rect targetArea) {
         Bitmap source = getBitmap();
         if (source == null) return null;
 
+        final Bitmap output = Bitmap.createBitmap(targetArea.width(), targetArea.height(), Bitmap.Config.ARGB_8888);
+        final Canvas canvas = new Canvas(output);
+        final Paint paint = new Paint();
+        paint.setAntiAlias(true);
+        paint.setFilterBitmap(true);
+        paint.setDither(true);
+        if (mCropMode == CropMode.CIRCLE) {
+            prepareCircularCropping(canvas, paint);
+        }
+        canvas.drawBitmap(source, cropArea, targetArea, paint);
+        return output;
+    }
+
+    /**
+     * Calculates the area to crop from the source bitmap
+     *
+     * @param source Source bitmap to calculate the area from
+     * @return Rect with the area that will be cropped from the source bitmap
+     */
+    protected Rect getCropArea(Bitmap source) {
         int x, y, w, h;
         float l = (mFrameRect.left / mScale);
         float t = (mFrameRect.top / mScale);
@@ -1080,36 +1093,20 @@ public class CropImageView extends ImageView {
         if (y + h > source.getHeight()) {
             h = source.getHeight() - y;
         }
-
-        return Bitmap.createBitmap(source, x, y, w, h, null, false);
+        return new Rect(x, y, x + w, y + h);
     }
 
     /**
      * Crop the square image in a circular
      *
-     * @param square image bitmap
-     * @return circular image bitmap
+     * @param canvas Canvas to apply the circular transformation
+     * @param paint  Paint element to paint over the canvas
      */
-    public Bitmap getCircularBitmap(Bitmap square) {
-        if (square == null) return null;
-        Bitmap output = Bitmap.createBitmap(square.getWidth(), square.getHeight(),
-                                            Bitmap.Config.ARGB_8888);
-
-        final Rect rect = new Rect(0, 0, square.getWidth(), square.getHeight());
-        Canvas canvas = new Canvas(output);
-
-        int halfWidth = square.getWidth() / 2;
-        int halfHeight = square.getHeight() / 2;
-
-        final Paint paint = new Paint();
-        paint.setAntiAlias(true);
-        paint.setFilterBitmap(true);
-
+    public void prepareCircularCropping(Canvas canvas, Paint paint) {
+        int halfWidth = canvas.getWidth() / 2;
+        int halfHeight = canvas.getHeight() / 2;
         canvas.drawCircle(halfWidth, halfHeight, Math.min(halfWidth, halfHeight), paint);
         paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
-
-        canvas.drawBitmap(square, rect, rect, paint);
-        return output;
     }
 
     private Bitmap getBitmap() {
